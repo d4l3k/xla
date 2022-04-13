@@ -133,7 +133,8 @@ AllToAllResult BuildAllToAll(xla::XlaOp input, xla::XlaOp token,
   const xla::Shape& input_shape = XlaHelpers::ShapeOfXlaOp(input);
   xla::Shape reduce_shape = MakeArrayShapeFromDimensions(
       input_shape.dimensions(), input_shape.dynamic_dimensions(),
-      input_shape.element_type(), static_cast<XlaDeviceType>(GetCurrentDevice().type()));
+      input_shape.element_type(),
+      static_cast<XlaDeviceType>(GetCurrentDevice().type()));
   TokenHandler token_handler(token);
   xla::XlaOp reduce_result = xla::AllToAll(
       token_handler.GetInput(input, &input_shape), split_dimension,
