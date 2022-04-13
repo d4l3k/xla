@@ -26,13 +26,13 @@ struct ReduceContext {
 };
 
 xla::Shape MakeReduceShape(absl::Span<const xla::Shape> operand_shapes) {
-  Device xla_device = GetCurrentDevice();
+  torch::lazy::BackendDevice xla_device = GetCurrentDevice();
   std::vector<xla::Shape> shapes_and_layouts;
   shapes_and_layouts.reserve(operand_shapes.size());
   for (auto& shape : operand_shapes) {
     shapes_and_layouts.push_back(MakeArrayShapeFromDimensions(
         shape.dimensions(), shape.dynamic_dimensions(), shape.element_type(),
-        xla_device.device_type.hw_type));
+        static_cast<XlaDeviceType>(xla_device.type())));
   }
   return xla::ShapeUtil::MakeTupleShape(shapes_and_layouts);
 }
@@ -133,7 +133,7 @@ AllToAllResult BuildAllToAll(xla::XlaOp input, xla::XlaOp token,
   const xla::Shape& input_shape = XlaHelpers::ShapeOfXlaOp(input);
   xla::Shape reduce_shape = MakeArrayShapeFromDimensions(
       input_shape.dimensions(), input_shape.dynamic_dimensions(),
-      input_shape.element_type(), GetCurrentDevice().device_type.hw_type);
+      input_shape.element_type(), static_cast<XlaDeviceType>(GetCurrentDevice().type()));
   TokenHandler token_handler(token);
   xla::XlaOp reduce_result = xla::AllToAll(
       token_handler.GetInput(input, &input_shape), split_dimension,

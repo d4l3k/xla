@@ -19,13 +19,13 @@ class AtenXlaDeviceMapper {
  public:
   static AtenXlaDeviceMapper* Get();
 
-  size_t GetDeviceOrdinal(const Device& device) const {
+  size_t GetDeviceOrdinal(const torch::lazy::BackendDevice& device) const {
     auto it = devices_ordinals_.find(device);
     XLA_CHECK(it != devices_ordinals_.end()) << device;
     return it->second;
   }
 
-  const Device& GetDeviceFromOrdinal(size_t ordinal) const {
+  const torch::lazy::BackendDevice& GetDeviceFromOrdinal(size_t ordinal) const {
     return devices_.at(ordinal);
   }
 
@@ -37,8 +37,8 @@ class AtenXlaDeviceMapper {
     }
   }
 
-  std::vector<Device> devices_;
-  std::map<Device, size_t> devices_ordinals_;
+  std::vector<torch::lazy::BackendDevice> devices_;
+  std::map<torch::lazy::BackendDevice, size_t> devices_ordinals_;
 };
 
 AtenXlaDeviceMapper* AtenXlaDeviceMapper::Get() {
@@ -88,7 +88,7 @@ std::vector<XLATensor> GetXlaTensors(absl::Span<const at::Tensor> tensors) {
   return xla_tensors;
 }
 
-XLATensor GetOrCreateXlaTensor(const at::Tensor& tensor, const Device& device) {
+XLATensor GetOrCreateXlaTensor(const at::Tensor& tensor, const torch::lazy::BackendDevice& device) {
   if (!tensor.defined()) {
     return XLATensor();
   }
@@ -97,7 +97,7 @@ XLATensor GetOrCreateXlaTensor(const at::Tensor& tensor, const Device& device) {
 }
 
 XLATensor GetOrCreateXlaTensor(const c10::optional<at::Tensor>& tensor,
-                               const Device& device) {
+                               const torch::lazy::BackendDevice& device) {
   if (!IsDefined(tensor)) {
     return XLATensor();
   }
@@ -106,7 +106,7 @@ XLATensor GetOrCreateXlaTensor(const c10::optional<at::Tensor>& tensor,
 }
 
 std::vector<XLATensor> GetOrCreateXlaTensors(
-    absl::Span<const at::Tensor> tensors, const Device& device) {
+    absl::Span<const at::Tensor> tensors, const torch::lazy::BackendDevice& device) {
   std::vector<XLATensor> xla_tensors;
   for (const at::Tensor& tensor : tensors) {
     xla_tensors.push_back(bridge::GetOrCreateXlaTensor(tensor, device));
@@ -186,7 +186,7 @@ void XlaUpdateTensors(absl::Span<const at::Tensor> dest_xla_tensors,
   }
 }
 
-c10::optional<Device> GetXlaDevice(const at::Tensor& tensor) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const at::Tensor& tensor) {
   auto xtensor = TryGetXlaTensor(tensor);
   if (!xtensor) {
     return c10::nullopt;
@@ -194,14 +194,14 @@ c10::optional<Device> GetXlaDevice(const at::Tensor& tensor) {
   return xtensor->GetDevice();
 }
 
-c10::optional<Device> GetXlaDevice(const c10::optional<at::Tensor>& tensor) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const c10::optional<at::Tensor>& tensor) {
   if (!tensor.has_value()) {
     return c10::nullopt;
   }
   return GetXlaDevice(*tensor);
 }
 
-c10::optional<Device> GetXlaDevice(const at::TensorList& tensors) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const at::TensorList& tensors) {
   for (const auto& tensor : tensors) {
     auto device = GetXlaDevice(tensor);
     if (device) {
@@ -211,28 +211,28 @@ c10::optional<Device> GetXlaDevice(const at::TensorList& tensors) {
   return c10::nullopt;
 }
 
-c10::optional<Device> GetXlaDevice(const at::TensorOptions& tensor_options) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const at::TensorOptions& tensor_options) {
   if (!tensor_options.has_device()) {
     return c10::nullopt;
   }
   return GetXlaDevice(tensor_options.device());
 }
 
-c10::optional<Device> GetXlaDevice(const c10::Device& device) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const c10::Device& device) {
   if (device.type() != at::kXLA) {
     return c10::nullopt;
   }
   return AtenDeviceToXlaDevice(device);
 }
 
-c10::optional<Device> GetXlaDevice(const c10::optional<c10::Device>& device) {
+c10::optional<torch::lazy::BackendDevice> GetXlaDevice(const c10::optional<c10::Device>& device) {
   if (!device) {
     return c10::nullopt;
   }
   return GetXlaDevice(*device);
 }
 
-Device AtenDeviceToXlaDevice(const c10::Device& device) {
+torch::lazy::BackendDevice AtenDeviceToXlaDevice(const c10::Device& device) {
   XLA_CHECK_EQ(device.type(), at::kXLA) << device;
   int ordinal = device.has_index() ? device.index() : -1;
   if (ordinal < 0) {
@@ -247,7 +247,7 @@ Device AtenDeviceToXlaDevice(const c10::Device& device) {
   return AtenXlaDeviceMapper::Get()->GetDeviceFromOrdinal(ordinal);
 }
 
-c10::Device XlaDeviceToAtenDevice(const Device& device) {
+c10::Device XlaDeviceToAtenDevice(const torch::lazy::BackendDevice& device) {
   return c10::Device(at::kXLA,
                      AtenXlaDeviceMapper::Get()->GetDeviceOrdinal(device));
 }
@@ -261,12 +261,12 @@ c10::Device AtenDefaultDevice() {
 }
 
 c10::Device SetCurrentDevice(const c10::Device& device) {
-  Device prev_device =
+  torch::lazy::BackendDevice prev_device =
       torch_xla::SetCurrentDevice(AtenDeviceToXlaDevice(device));
   return XlaDeviceToAtenDevice(prev_device);
 }
 
-Device SetCurrentDevice(const Device& device) {
+torch::lazy::BackendDevice SetCurrentDevice(const torch::lazy::BackendDevice& device) {
   return torch_xla::SetCurrentDevice(device);
 }
 
@@ -303,7 +303,7 @@ std::vector<at::Tensor> AtenFromXlaTensors(
 }
 
 at::Tensor CreateXlaTensor(at::Tensor tensor,
-                           const c10::optional<Device>& device) {
+                           const c10::optional<torch::lazy::BackendDevice>& device) {
   if (tensor.defined() && device) {
     XLATensor xla_tensor = XLATensor::Create(std::move(tensor), *device);
     tensor = AtenFromXlaTensor(xla_tensor);
@@ -312,7 +312,7 @@ at::Tensor CreateXlaTensor(at::Tensor tensor,
 }
 
 std::vector<at::Tensor> CreateXlaTensors(const std::vector<at::Tensor>& tensors,
-                                         const c10::optional<Device>& device) {
+                                         const c10::optional<torch::lazy::BackendDevice>& device) {
   std::vector<at::Tensor> xtensors;
   for (auto& tensor : tensors) {
     xtensors.push_back(CreateXlaTensor(tensor, device));
